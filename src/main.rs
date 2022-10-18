@@ -7,17 +7,27 @@ enum MetaCommandResult {
 
 enum PrepareResult {
     PrepareSuccess,
+    PrepareSyntaxError,
     PrepareUnrecognizedStatement,
 }
 
+#[derive(Debug)]
 enum StatementType {
     StatementInsert,
     StatementSelect,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
+struct Row {
+    id: u32,
+    username: String,
+    email: String,
+}
+
+#[derive(Default, Debug)]
 struct Statement {
     kind: Option<StatementType>,
+    row_to_insert: Option<Row>,
 }
 
 fn execute_statement(statement: &Statement) -> () {
@@ -42,16 +52,38 @@ fn do_meta_command(buffer: &String) -> MetaCommandResult {
 
 fn prepare_statement(buffer: &String, statement: &mut Statement) -> PrepareResult {
     if buffer.starts_with("insert") {
-        (*statement).kind = Some(StatementType::StatementInsert);
+        statement.kind = Some(StatementType::StatementInsert);
 
-        // TODO this enum is useless lol just use Result or Option here!
-        return PrepareResult::PrepareSuccess;
+        let args = buffer.split_whitespace().skip(1).collect::<Vec<&str>>();
+
+        match args.as_slice() {
+            [id, username, email] => {
+                // TODO: this can be much better in rust version
+                let id = match id.parse::<u32>() {
+                    Ok(n) => n,
+                    Err(_) => {
+                        return PrepareResult::PrepareSyntaxError;
+                    }
+                };
+
+                statement.row_to_insert = Some(Row {
+                    id: id,
+                    username: username.to_string(),
+                    email: email.to_string(),
+                });
+
+                return PrepareResult::PrepareSuccess;
+            }
+            _ => {
+                return PrepareResult::PrepareSyntaxError;
+            }
+        }
     }
 
     if buffer.starts_with("select") {
         (*statement).kind = Some(StatementType::StatementSelect);
 
-        // TODO this enum is useless lol just use Result or Option here!
+        // TODO: this enum is useless lol just use Result or Option here!
         return PrepareResult::PrepareSuccess;
     }
 
@@ -60,7 +92,6 @@ fn prepare_statement(buffer: &String, statement: &mut Statement) -> PrepareResul
 
 fn print_prompt() {
     print!("db > ");
-
     io::stdout().lock().flush().unwrap();
 }
 
@@ -91,10 +122,15 @@ fn main() {
             }
         }
 
-        let mut statement: Statement = Statement { kind: None };
+        let mut statement: Statement = Statement::default();
 
         match prepare_statement(&input_buffer, &mut statement) {
-            PrepareResult::PrepareSuccess => (),
+            PrepareResult::PrepareSuccess => {
+
+            }
+            PrepareResult::PrepareSyntaxError => {
+                println!("Unknown syntax error of '{}'.", input_buffer);
+            }
             PrepareResult::PrepareUnrecognizedStatement => {
                 println!("Unrecognized keyword at start of '{}'.", input_buffer);
                 continue;
